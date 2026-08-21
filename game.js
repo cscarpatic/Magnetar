@@ -82,11 +82,17 @@
   }
   function reflectedY(y){const span=WORLD.h*2;y=((y%span)+span)%span;return y>WORLD.h?span-y:y;}
   function updateCpu(dt){
-    const c=state.cpu,b=state.ball;c.think-=dt;if(c.think>0)return;c.think=.12+Math.random()*.10;
-    const travel=clamp((c.x-b.x)/(Math.abs(b.vx)+320),-.35,.55),py=reflectedY(b.y+b.vy*travel),danger=b.x<WORLD.w*.64||b.vx<0;
-    if(c.type==='repel'){c.targetX=danger?b.x-155:WORLD.w*.16;c.targetY=py;}
-    else{c.targetX=danger?b.x+145:WORLD.w*.27;const side=Math.sign(b.vy||(b.y-WORLD.h/2)||1);c.targetY=clamp(py+side*105,70,WORLD.h-70);}
-    c.targetX=clamp(c.targetX,70,WORLD.w*2/3-55);moveToward(c,c.targetX,c.targetY,c.maxSpeed,dt);
+    const c=state.cpu,b=state.ball;
+    c.think-=dt;
+    if(c.think<=0){
+      c.think=.12+Math.random()*.10;
+      const travel=clamp((c.x-b.x)/(Math.abs(b.vx)+320),-.35,.55),py=reflectedY(b.y+b.vy*travel),danger=b.x<WORLD.w*.64||b.vx<0;
+      if(c.type==='repel'){c.targetX=danger?b.x-155:WORLD.w*.16;c.targetY=py;}
+      else{c.targetX=danger?b.x+145:WORLD.w*.27;const side=Math.sign(b.vy||(b.y-WORLD.h/2)||1);c.targetY=clamp(py+side*105,70,WORLD.h-70);}
+      c.targetX=clamp(c.targetX,70,WORLD.w*2/3-55);
+    }
+    // La CPU decide a intervalli, ma continua a muoversi verso l'ultimo bersaglio a ogni step.
+    moveToward(c,c.targetX,c.targetY,c.maxSpeed,dt);
   }
 
   function wallWeights(s){const r=s.fieldR;return{left:clamp(1-s.x/r,0,1),right:clamp(1-(WORLD.w-s.x)/r,0,1),top:clamp(1-s.y/r,0,1),bottom:clamp(1-(WORLD.h-s.y)/r,0,1)};}
