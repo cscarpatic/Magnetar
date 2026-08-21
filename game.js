@@ -316,12 +316,10 @@
     if (emitter.type === 'attract') {
       const charge = emitter.capture;
       const side = Math.sign(dy || b.vy || 1);
-      const launch = 520 + 620 * charge;
-      b.vx += dir * (launch + sp * .22);
-      b.vy += side * (170 + 250 * charge);
-      const minSpeed = 980 + 430 * charge;
-      const after = speedOf(b) || 1;
-      if (after < minSpeed) { b.vx = b.vx / after * minSpeed; b.vy = b.vy / after * minSpeed; }
+      const launchSpeed = clamp(1020 + 420 * charge + sp * .18, 1050, 1580);
+      const targetVy = clamp(b.vy * .42 + side * (180 + 260 * charge), -launchSpeed * .58, launchSpeed * .58);
+      b.vy = targetVy;
+      b.vx = dir * Math.sqrt(Math.max(1, launchSpeed * launchSpeed - targetVy * targetVy));
       emitter.capture = 0;
       if (owner === 'player') {
         feedback(charge > .55 ? 'PERFECT SLINGSHOT!' : 'SLINGSHOT!', `${Math.round(speedOf(b))} SPEED`, 720);
@@ -406,7 +404,7 @@
       fx = -tx * strength; fy = -ty * strength;
     } else {
       const outerCatch = Math.exp(-.5 * Math.pow((t - .62) / .23, 2));
-      const radial = 1900 * outerCatch * smooth01((t - .10) / .15) * fadeOut(t, .92) * zone;
+      const radial = 1600 * outerCatch * smooth01((t - .10) / .15) * fadeOut(t, .92) * zone;
       fx = tx * radial; fy = ty * radial;
 
       const tangentX = -ty, tangentY = tx;
@@ -416,15 +414,14 @@
       const lateral = Math.abs(tangentVelocity);
       const passQuality = .62 + .38 * smooth01(lateral / 110);
       const orbitBand = Math.exp(-.5 * Math.pow((t - .48) / .32, 2));
-      const tangential = 3650 * orbitBand * fadeOut(t, .95) * passQuality * zone;
+      const tangential = 3100 * orbitBand * fadeOut(t, .95) * passQuality * zone;
       fx += tangentX * spin * tangential;
       fy += tangentY * spin * tangential;
 
       const dir = ownerDir(owner);
       const goalward = owner === 'player' ? Math.max(0, b.vx) : Math.max(0, -b.vx);
-      const assist = smooth01((.82 - t) / .55);
-      fx += dir * goalward * 2.15 * assist;
-      fx += dir * 760 * smooth01((.72 - t) / .48) * zone;
+      const brake = fadeOut(t, .93);
+      fx += dir * goalward * 4.5 * brake;
 
       const captureZone = t < .78;
       if (captureZone) s.capture = clamp(s.capture + dt * (1.15 + .75 * (1 - t)), 0, 1);
