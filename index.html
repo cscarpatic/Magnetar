@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#050816" />
-  <title>Magnetar — Gravity Duel</title>
+  <title>Magnetar — Magnetic Duel</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main id="app">
     <header>
-      <div class="brand"><h1>Magnetar</h1><span>gravity duel</span></div>
+      <div class="brand"><h1>Magnetar</h1><span>magnetic duel</span></div>
       <div class="hud">
         <button id="pauseBtn" type="button">Pausa</button>
         <button id="resetBtn" type="button">Nuova partita</button>
@@ -19,26 +19,35 @@
 
     <section id="arenaWrap" aria-label="Campo di gioco">
       <div class="frame" id="frame">
-        <canvas id="game" aria-label="Magnetar, gioco di duello gravitazionale"></canvas>
+        <canvas id="game" aria-label="Magnetar, duello di campi magnetici"></canvas>
         <div id="toast"></div>
         <div class="overlay" id="menu">
           <div class="card">
             <h2>Difendi il tuo lato.</h2>
-            <p>Tu sei a destra. Il computer è a sinistra. Muovi il tuo campo gravitazionale e impedisci alla pallina di toccare la parete destra.</p>
-            <div class="choices" role="group" aria-label="Scegli la polarità">
-              <button class="choice active" data-type="attract" type="button">ATTRATTORE<br><span class="small">piega e cattura la traiettoria</span></button>
-              <button class="choice" data-type="repel" type="button">REPULSORE<br><span class="small">respinge con forza</span></button>
+            <p class="intro">Tu sei a destra. Muovi il generatore magnetico: la pallina può attraversarlo, ma reagisce solo dentro gli anelli del campo.</p>
+
+            <div class="modeChoices" role="group" aria-label="Scegli la disciplina">
+              <button class="modeChoice active" data-mode="duel" type="button"><strong>DUEL</strong><span>R vs R</span></button>
+              <button class="modeChoice" data-mode="orbit" type="button"><strong>ORBIT</strong><span>A vs A</span></button>
+              <button class="modeChoice" data-mode="polarity" type="button"><strong>POLARITY</strong><span>A vs R</span></button>
             </div>
+            <p id="modeHelp" class="modeHelp">Repulsore contro Repulsore: rapido, diretto, arcade.</p>
+
+            <div id="polarityChoices" class="polarityChoices" role="group" aria-label="Scegli il tuo polo" hidden>
+              <button class="polarityChoice active" data-polarity="attract" type="button">TU ATTRATTORE</button>
+              <button class="polarityChoice" data-polarity="repel" type="button">TU REPULSORE</button>
+            </div>
+
             <button id="startBtn" class="start" type="button">INIZIA — primo a 7</button>
-            <p class="small">Mouse/touch: trascina il tuo cerchio · Tastiera: WASD o frecce · Puoi avanzare fino a 2/3 del campo.</p>
+            <p class="small">Mouse/touch: trascina il generatore · Tastiera: WASD o frecce · Puoi avanzare fino a 2/3 del campo.</p>
           </div>
         </div>
       </div>
     </section>
 
     <footer>
-      <div class="legend"><span><i class="dot cyan"></i>Attrazione</span><span><i class="dot red"></i>Repulsione</span></div>
-      <div>Alto e basso rimbalzano · sinistra/destra = punto</div>
+      <div class="legend"><span><i class="dot cyan"></i>Attrattore</span><span><i class="dot red"></i>Repulsore</span><span><i class="ringIcon"></i>raggio attivo</span></div>
+      <div>Gli anelli si deformano sulle pareti · alto/basso rimbalzano · sinistra/destra = punto</div>
     </footer>
   </main>
   <script src="game.js"></script>
