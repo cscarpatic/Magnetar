@@ -3,51 +3,107 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#050816" />
+  <meta name="theme-color" content="#030711" />
+  <meta name="description" content="Magnetar — magnetic arcade duel" />
   <title>Magnetar — Magnetic Duel</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main id="app">
-    <header>
-      <div class="brand"><h1>Magnetar</h1><span>magnetic duel</span></div>
-      <div class="hud">
-        <button id="pauseBtn" type="button">Pausa</button>
-        <button id="resetBtn" type="button">Nuova partita</button>
+    <header class="topbar">
+      <div class="brand">
+        <h1>MAGNETAR</h1>
+        <span>magnetic duel</span>
+      </div>
+      <div class="scoreboard" aria-label="Punteggio">
+        <strong id="playerScore">0</strong>
+        <span>—</span>
+        <strong id="cpuScore">0</strong>
+      </div>
+      <div class="hud-actions">
+        <button id="pauseBtn" type="button">Ⅱ PAUSA</button>
+        <button id="resetBtn" type="button">＋ NUOVA</button>
       </div>
     </header>
 
-    <section id="arenaWrap" aria-label="Campo di gioco">
+    <section id="arenaWrap" aria-label="Campo di gioco Magnetar">
       <div class="frame" id="frame">
-        <canvas id="game" aria-label="Magnetar, duello di campi magnetici"></canvas>
-        <div id="toast"></div>
+        <canvas id="game" aria-label="Duello magnetico arcade"></canvas>
+
+        <div id="actionFeedback" class="actionFeedback" aria-live="polite">
+          <strong id="actionTitle"></strong>
+          <span id="actionSub"></span>
+        </div>
+
+        <div class="sideTag cpuTag">
+          <span>RIVALE</span><strong id="cpuTypeLabel">REPULSOR</strong>
+        </div>
+        <div class="sideTag playerTag">
+          <span>TU</span><strong id="playerTypeLabel">REPULSOR</strong>
+        </div>
+
+        <div class="pulseDock" id="pulseDock">
+          <button id="pulseBtn" class="pulseButton" type="button" aria-label="Attiva Pulse">
+            <span class="pulseIcon">⚡</span>
+            <strong>PULSE</strong>
+          </button>
+          <div class="pulseMeta">
+            <strong id="pulseState">READY</strong>
+            <span id="pulseHint">SPAZIO / TAP</span>
+          </div>
+        </div>
+
+        <div class="matchPoint" id="matchPoint">MATCH POINT</div>
+
         <div class="overlay" id="menu">
           <div class="card">
-            <h2>Difendi il tuo lato.</h2>
-            <p class="intro">Tu sei a destra. Muovi il generatore magnetico: la pallina può attraversarlo, ma reagisce solo dentro gli anelli del campo.</p>
+            <div class="eyebrow">NEON KINETIC ARENA</div>
+            <h2 id="menuTitle">Difendi il tuo lato.</h2>
+            <p class="intro" id="menuIntro">Muovi il generatore, piega la traiettoria e usa <b>PULSE</b> nel momento giusto.</p>
 
-            <div class="modeChoices" role="group" aria-label="Scegli la disciplina">
-              <button class="modeChoice active" data-mode="duel" type="button"><strong>DUEL</strong><span>R vs R</span></button>
-              <button class="modeChoice" data-mode="orbit" type="button"><strong>ORBIT</strong><span>A vs A</span></button>
-              <button class="modeChoice" data-mode="polarity" type="button"><strong>POLARITY</strong><span>A vs R</span></button>
-            </div>
-            <p id="modeHelp" class="modeHelp">Repulsore contro Repulsore: rapido, diretto, arcade.</p>
-
-            <div id="polarityChoices" class="polarityChoices" role="group" aria-label="Scegli il tuo polo" hidden>
-              <button class="polarityChoice active" data-polarity="attract" type="button">TU ATTRATTORE</button>
-              <button class="polarityChoice" data-polarity="repel" type="button">TU REPULSORE</button>
+            <div class="quickRules">
+              <span><b>1</b> Muovi</span>
+              <span><b>2</b> Carica</span>
+              <span><b>3</b> Spara</span>
             </div>
 
-            <button id="startBtn" class="start" type="button">INIZIA — primo a 7</button>
-            <p class="small">Mouse/touch: trascina il generatore · Tastiera: WASD o frecce · Puoi avanzare fino a 2/3 del campo.</p>
+            <div class="settingsRow">
+              <div>
+                <label>DISCIPLINA</label>
+                <div class="segmented" role="group" aria-label="Disciplina">
+                  <button data-mode="duel" class="active" type="button">DUEL</button>
+                  <button data-mode="orbit" type="button">ORBIT</button>
+                  <button data-mode="polarity" type="button">POLARITY</button>
+                </div>
+              </div>
+              <div>
+                <label>RIVALE</label>
+                <div class="segmented" role="group" aria-label="Difficoltà rivale">
+                  <button data-difficulty="rookie" type="button">ROOKIE</button>
+                  <button data-difficulty="rival" class="active" type="button">RIVAL</button>
+                  <button data-difficulty="maniac" type="button">MANIAC</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="polarityChoices" class="polarityChoices" hidden>
+              <label>IL TUO POLO</label>
+              <div class="segmented compact">
+                <button data-polarity="attract" class="active" type="button">ATTRACT</button>
+                <button data-polarity="repel" type="button">REPEL</button>
+              </div>
+            </div>
+
+            <button id="startBtn" class="start" type="button">PLAY — PRIMO A 7</button>
+            <p class="small">Mouse/touch: trascina · WASD/frecce: muovi · SPAZIO o pulsante: Pulse</p>
           </div>
         </div>
       </div>
     </section>
 
     <footer>
-      <div class="legend"><span><i class="dot cyan"></i>Attrattore</span><span><i class="dot red"></i>Repulsore</span><span><i class="ringIcon"></i>raggio attivo</span></div>
-      <div>Gli anelli si deformano sulle pareti · alto/basso rimbalzano · sinistra/destra = punto</div>
+      <div class="legend"><span><i class="dot cyan"></i>TU</span><span><i class="dot red"></i>RIVALE</span><span><i class="zoneIcon"></i>DANGER ZONE = più potenza</span></div>
+      <div id="statusLine">PULSE pronto · entra verso il centro per aumentare la forza.</div>
     </footer>
   </main>
   <script src="game.js"></script>
