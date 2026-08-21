@@ -35,6 +35,8 @@
           <span id="actionSub"></span>
         </div>
 
+        <div id="rallyBadge" class="rallyBadge"></div>
+
         <div class="sideTag cpuTag">
           <span>RIVALE</span><strong id="cpuTypeLabel">REPULSOR</strong>
         </div>
@@ -42,14 +44,25 @@
           <span>TU</span><strong id="playerTypeLabel">REPULSOR</strong>
         </div>
 
-        <div class="pulseDock" id="pulseDock">
-          <button id="pulseBtn" class="pulseButton" type="button" aria-label="Attiva Pulse">
-            <span class="pulseIcon">⚡</span>
-            <strong>PULSE</strong>
-          </button>
-          <div class="pulseMeta">
-            <strong id="pulseState">READY</strong>
-            <span id="pulseHint">SPAZIO / TAP</span>
+        <div class="roleMeter" id="roleMeter">
+          <div class="roleMeterHead"><strong id="roleMeterLabel">HEAT</strong><span id="roleMeterText">0%</span></div>
+          <div class="roleMeterTrack"><i id="roleMeterFill"></i></div>
+        </div>
+
+        <div class="controlDock">
+          <div class="dashDock">
+            <button id="dashBtn" class="dashButton" type="button" aria-label="Attiva Dash">⇧</button>
+            <div><strong>DASH</strong><span id="dashState">READY</span></div>
+          </div>
+          <div class="pulseDock" id="pulseDock">
+            <button id="pulseBtn" class="pulseButton" type="button" aria-label="Attiva Pulse">
+              <span class="pulseIcon">⚡</span>
+              <strong>PULSE</strong>
+            </button>
+            <div class="pulseMeta">
+              <strong id="pulseState">READY</strong>
+              <span id="pulseHint">SPAZIO / TAP</span>
+            </div>
           </div>
         </div>
 
@@ -59,12 +72,13 @@
           <div class="card">
             <div class="eyebrow">NEON KINETIC ARENA</div>
             <h2 id="menuTitle">Difendi il tuo lato.</h2>
-            <p class="intro" id="menuIntro">Muovi il generatore, piega la traiettoria e usa <b>PULSE</b> nel momento giusto.</p>
+            <p class="intro" id="menuIntro">Muovi il generatore, leggi il ruolo e cerca il momento perfetto.</p>
 
             <div class="quickRules">
               <span><b>1</b> Muovi</span>
-              <span><b>2</b> Carica</span>
-              <span><b>3</b> Spara</span>
+              <span><b>2</b> Timing</span>
+              <span><b>3</b> Pulse</span>
+              <span><b>4</b> Dash</span>
             </div>
 
             <div class="settingsRow">
@@ -87,23 +101,27 @@
             </div>
 
             <div id="polarityChoices" class="polarityChoices" hidden>
-              <label>IL TUO POLO</label>
+              <label>RUOLO INIZIALE — poi si scambia dopo ogni punto</label>
               <div class="segmented compact">
                 <button data-polarity="attract" class="active" type="button">ATTRACT</button>
                 <button data-polarity="repel" type="button">REPEL</button>
               </div>
+              <div class="roleExplainer">
+                <span><b>ATTRACTOR</b> cattura → mira → Perfect Slingshot</span>
+                <span><b>REPULSOR</b> gestisce Heat → Perfect Parry</span>
+              </div>
             </div>
 
             <button id="startBtn" class="start" type="button">PLAY — PRIMO A 7</button>
-            <p class="small">Mouse/touch: trascina · WASD/frecce: muovi · SPAZIO o pulsante: Pulse</p>
+            <p class="small">Mouse/touch: trascina · WASD/frecce: muovi · SPAZIO: Pulse · SHIFT / doppio tap: Dash</p>
           </div>
         </div>
       </div>
     </section>
 
     <footer>
-      <div class="legend"><span><i class="dot cyan"></i>TU</span><span><i class="dot red"></i>RIVALE</span><span><i class="zoneIcon"></i>DANGER ZONE = più potenza</span></div>
-      <div id="statusLine">PULSE pronto · entra verso il centro per aumentare la forza.</div>
+      <div class="legend"><span><i class="dot cyan"></i>TU</span><span><i class="dot red"></i>RIVALE</span><span><i class="zoneIcon"></i>HIGH RISK = +20% campo</span></div>
+      <div id="statusLine">Leggi il ruolo: Attractor controlla, Repulsor para.</div>
     </footer>
   </main>
   <script src="game.js"></script>
