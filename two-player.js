@@ -24,7 +24,8 @@
   const PULSE_DURATION = .20;
   const DASH_COOLDOWN = 1.75;
   const DASH_DURATION = .12;
-  const CAPTURE_MAX = .82;
+  const CAPTURE_MAX = 1.35;
+  const CAPTURE_RELEASE_LOCK = .28;
   const HEAT_LOCK = .96;
   const keys = new Set();
   const pointers = new Map();
@@ -32,8 +33,8 @@
 
   const MODES = {
     duel: { left: 'repel', right: 'repel', help: 'DUEL: due Repulsor. Difesa immediata, Heat e Perfect Parry.' },
-    orbit: { left: 'attract', right: 'attract', help: 'ORBIT: due Attractor. Cattura, aspetta la finestra dorata e usa Perfect Slingshot.' },
-    polarity: { left: 'attract', right: 'repel', help: 'POLARITY: ruoli opposti e scambio dopo ogni punto. Primo a 5.' }
+    orbit: { left: 'attract', right: 'attract', help: 'ORBIT: aggancia la palla, fai swipe e rilascia. La velocità del gesto decide la potenza.' },
+    polarity: { left: 'attract', right: 'repel', help: 'POLARITY: ruoli opposti e scambio dopo ogni punto. L’Attractor tira con swipe + rilascio.' }
   };
 
   const makeEmitter = (x, side) => ({
@@ -46,7 +47,7 @@
     score: { left: 0, right: 0 },
     left: makeEmitter(WORLD.w * .16, 'left'),
     right: makeEmitter(WORLD.w * .84, 'right'),
-    ball: { x: WORLD.w / 2, y: WORLD.h / 2, vx: 0, vy: 0, r: 14, trail: [], capturedBy: null, chargedBy: null, chargedTime: 0 },
+    ball: { x: WORLD.w / 2, y: WORLD.h / 2, vx: 0, vy: 0, r: 14, trail: [], capturedBy: null, chargedBy: null, chargedTime: 0, captureLock: 0 },
     particles: [], rally: 0, lastOwner: null, rallyTimer: 0, wallTimer: 0
   };
 
@@ -113,8 +114,9 @@
     state.left.x = WORLD.w * .16; state.left.y = WORLD.h / 2;
     state.right.x = WORLD.w * .84; state.right.y = WORLD.h / 2;
     for (const e of [state.left, state.right]) { e.pulse = 0; e.heat = 0; e.overheated = false; e.captureTime = 0; e.dashTime = 0; e.cooldown = Math.min(e.cooldown, .35); }
+    for (const p of pointers.values()) p.swipeArmed = false;
     const b = state.ball;
-    b.capturedBy = null; b.chargedBy = null; b.chargedTime = 0; b.trail.length = 0;
+    b.capturedBy = null; b.chargedBy = null; b.chargedTime = 0; b.captureLock = 0; b.trail.length = 0;
     b.x = WORLD.w / 2; b.y = WORLD.h / 2 + (Math.random() - .5) * 150;
     const a = (Math.random() - .5) * .52, dir = serveDir || (Math.random() < .5 ? -1 : 1), sp = 500;
     b.vx = Math.cos(a) * sp * dir; b.vy = Math.sin(a) * sp;
@@ -126,7 +128,7 @@
     polarityLeftType = 'attract'; applyMode(false);
     for (const e of [state.left, state.right]) { e.cooldown = 0; e.dashCooldown = 0; }
     resetPositions(); running = true; menu.style.display = 'none'; lastTime = performance.now(); accumulator = 0;
-    feedback('READY', selectedMode === 'polarity' ? 'I RUOLI CAMBIANO DOPO OGNI PUNTO' : 'FIRST TO WIN', 800);
+    feedback('READY', selectedMode === 'orbit' ? 'CATCH → SWIPE → RELEASE' : selectedMode === 'polarity' ? 'ATTRACTOR = SWIPE · REPULSOR = PARRY' : 'FIRST TO WIN', 900);
   }
 
   function endMatch(side) {
@@ -169,6 +171,7 @@
   function updateHuman(e, dt) {
     if (e.dashTime > 0) { e.x += e.dashX * 1700 * dt; e.y += e.dashY * 1700 * dt; return; }
     const p = pointerFor(e.side), kv = keyboardVector(e.side);
+    if (state.ball.capturedBy === e && p) return;
     if (p) moveToward(e, p.x, p.y, e.maxSpeed, dt);
     else if (kv) { e.x += kv.x * e.maxSpeed * dt; e.y += kv.y * e.maxSpeed * dt; }
   }
@@ -179,7 +182,7 @@
   }
 
   function activateDash(e) {
-    if (!running || paused || e.dashCooldown > 0) return;
+    if (!running || paused || e.dashCooldown > 0 || state.ball.capturedBy === e) return;
     let v = keyboardVector(e.side); const p = pointerFor(e.side);
     if (!v && p) { const m = Math.hypot(p.x - e.x, p.y - e.y) || 1; v = { x: (p.x - e.x) / m, y: (p.y - e.y) / m }; }
     if (!v) { const b = state.ball, m = Math.hypot(b.x - e.x, b.y - e.y) || 1; v = { x: (b.x - e.x) / m, y: (b.y - e.y) / m }; }
@@ -195,9 +198,16 @@
     return tangentX * dir > .82 && Math.abs(tangentY) < .56;
   }
 
+  function armPointerSwipe(p) {
+    p.swipeArmed = true;
+    p.swipeStartX = p.x;
+    p.swipeStartY = p.y;
+    p.swipeStartT = performance.now();
+  }
+
   function tryNearestCapture() {
     const b = state.ball;
-    if (b.capturedBy) return false;
+    if (b.capturedBy || b.captureLock > 0) return false;
     const candidates = [state.left, state.right]
       .filter(e => e.type === 'attract')
       .map(e => ({ e, d: Math.hypot(b.x - e.x, b.y - e.y) }))
@@ -207,25 +217,43 @@
   }
 
   function enterCapture(e) {
-    const b = state.ball; if (b.capturedBy || e.type !== 'attract') return false;
+    const b = state.ball; if (b.capturedBy || b.captureLock > 0 || e.type !== 'attract') return false;
     const dx = b.x - e.x, dy = b.y - e.y, d = Math.hypot(dx, dy); if (d > e.fieldR * .58) return false;
     b.capturedBy = e; e.captureTime = 0; e.orbitAngle = Math.atan2(dy, dx);
     const cross = b.vx * dy - b.vy * dx; e.orbitSpin = Math.sign(cross || (e.side === 'left' ? 1 : -1));
-    b.vx = b.vy = 0; registerRally(e.side); burst(b.x, b.y, e.side, 10, 130);
-    feedback(`CATCH ${e.side === 'left' ? 'P1' : 'P2'}`, 'ASPETTA LA FINESTRA DORATA', 430); return true;
+    b.vx = b.vy = 0;
+    const p = pointerFor(e.side); if (p) armPointerSwipe(p);
+    registerRally(e.side); burst(b.x, b.y, e.side, 10, 130);
+    feedback(`CATCH ${e.side === 'left' ? 'P1' : 'P2'}`, 'SWIPE E RILASCIA', 520); return true;
   }
 
-  function releaseCapture(e, forced = false) {
+  function releaseCapture(e, forced = false, swipe = null) {
     const b = state.ball; if (b.capturedBy !== e) return false;
-    const perfect = perfectSlingWindow(e) && !forced, dir = ownerDir(e.side), spin = e.orbitSpin;
-    let tx = -Math.sin(e.orbitAngle) * spin, ty = Math.cos(e.orbitAngle) * spin;
-    if (tx * dir < .25) tx = dir * .55;
+    let tx, ty, speed, perfect = false;
+
+    if (swipe && !forced) {
+      const dist = Math.hypot(swipe.dx, swipe.dy), duration = clamp(swipe.duration, .055, .80);
+      if (dist < 14) { tx = ownerDir(e.side); ty = 0; }
+      else { tx = swipe.dx / dist; ty = swipe.dy / dist; }
+      speed = clamp(680 + (dist / duration) * .34, 720, 1850);
+      perfect = speed >= 1550;
+    } else {
+      perfect = perfectSlingWindow(e) && !forced;
+      const dir = ownerDir(e.side), spin = e.orbitSpin;
+      tx = -Math.sin(e.orbitAngle) * spin; ty = Math.cos(e.orbitAngle) * spin;
+      if (tx * dir < .25) tx = dir * .55;
+      const m0 = Math.hypot(tx, ty) || 1; tx /= m0; ty /= m0;
+      const charge = clamp(e.captureTime / CAPTURE_MAX, 0, 1);
+      speed = perfect ? 1580 : forced ? 1050 : 1210 + 210 * charge;
+      if (tx * dir < .55) { tx = dir * .55; ty = Math.sign(ty || 1) * Math.sqrt(Math.max(.01, 1 - tx * tx)); }
+    }
+
     const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
-    const charge = clamp(e.captureTime / CAPTURE_MAX, 0, 1), speed = perfect ? 1580 : forced ? 1050 : 1210 + 210 * charge;
     b.vx = tx * speed; b.vy = ty * speed;
-    if (b.vx * dir < speed * .55) { b.vx = dir * speed * .55; b.vy = Math.sign(b.vy || 1) * Math.sqrt(Math.max(1, speed * speed - b.vx * b.vx)); }
-    b.capturedBy = null; e.captureTime = 0; b.chargedBy = e.side; b.chargedTime = perfect ? 1.35 : .85; registerRally(e.side);
-    feedback(perfect ? 'SUPERCHARGE!' : forced ? 'AUTO RELEASE' : 'SLINGSHOT', `${e.side === 'left' ? 'P1' : 'P2'} · ${Math.round(speed)} SPEED`, perfect ? 760 : 520);
+    b.capturedBy = null; b.captureLock = CAPTURE_RELEASE_LOCK; e.captureTime = 0;
+    b.chargedBy = e.side; b.chargedTime = perfect ? 1.35 : .85; registerRally(e.side);
+    const p = pointerFor(e.side); if (p) p.swipeArmed = false;
+    feedback(perfect ? 'SUPERCHARGE SWIPE!' : forced ? 'AUTO RELEASE' : swipe ? 'SWIPE SHOT!' : 'SLINGSHOT', `${e.side === 'left' ? 'P1' : 'P2'} · ${Math.round(speed)} SPEED`, perfect ? 760 : 520);
     if (perfect) { sfx('perfect'); shake = 11; hitStop = .025; }
     burst(b.x, b.y, perfect ? 'gold' : e.side, perfect ? 24 : 15, perfect ? 300 : 220); return true;
   }
@@ -291,10 +319,10 @@
 
   function updateCapturedBall(dt) {
     const b = state.ball, e = b.capturedBy; if (!e) return false;
-    e.captureTime += dt; e.orbitAngle += e.orbitSpin * (4.2 + 1.8 * clamp(e.captureTime / CAPTURE_MAX, 0, 1)) * dt;
-    const rr = e.fieldR * (.40 - .055 * clamp(e.captureTime / CAPTURE_MAX, 0, 1));
+    e.captureTime += dt; e.orbitAngle += e.orbitSpin * (3.4 + 1.2 * clamp(e.captureTime / CAPTURE_MAX, 0, 1)) * dt;
+    const rr = e.fieldR * (.40 - .045 * clamp(e.captureTime / CAPTURE_MAX, 0, 1));
     b.x = e.x + Math.cos(e.orbitAngle) * rr; b.y = e.y + Math.sin(e.orbitAngle) * rr; b.vx = b.vy = 0;
-    b.trail.push({ x: b.x, y: b.y, speed: 760 + e.captureTime * 500 }); if (b.trail.length > 44) b.trail.shift();
+    b.trail.push({ x: b.x, y: b.y, speed: 720 + e.captureTime * 320 }); if (b.trail.length > 44) b.trail.shift();
     if (e.captureTime >= CAPTURE_MAX) releaseCapture(e, true); return true;
   }
   function updateBall(dt) {
@@ -322,7 +350,7 @@
   }
   function update(dt) {
     if (!running || paused) return; if (hitStop > 0) { hitStop -= dt; updateParticles(dt * .3); return; }
-    updateMeters(state.left, dt); updateMeters(state.right, dt); state.ball.chargedTime = Math.max(0, state.ball.chargedTime - dt); if (!state.ball.chargedTime) state.ball.chargedBy = null;
+    updateMeters(state.left, dt); updateMeters(state.right, dt); state.ball.chargedTime = Math.max(0, state.ball.chargedTime - dt); state.ball.captureLock = Math.max(0, state.ball.captureLock - dt); if (!state.ball.chargedTime) state.ball.chargedBy = null;
     state.rallyTimer = Math.max(0, state.rallyTimer - dt); state.wallTimer = Math.max(0, state.wallTimer - dt); if (!state.rallyTimer && state.rally < 2) state.rally = 0;
     if (feedbackTimer > 0) { feedbackTimer -= dt; if (feedbackTimer <= 0) feedbackEl.classList.remove('show'); }
     shake *= Math.pow(.035, dt); updateHuman(state.left, dt); updateHuman(state.right, dt); enforceZones(); updateBall(dt); updateParticles(dt); updateHud();
@@ -336,15 +364,15 @@
   function updateHudSide(e) {
     const h = hudFor(e.side); h.role.textContent = e.type === 'attract' ? 'ATTRACTOR' : 'REPULSOR';
     if (e.type === 'repel') { h.meterLabel.textContent = 'HEAT'; h.meterText.textContent = e.overheated ? 'OVERHEAT' : `${Math.round(e.heat * 100)}%`; h.meterFill.style.width = `${e.heat * 100}%`; }
-    else { const cap = state.ball.capturedBy === e ? clamp(e.captureTime / CAPTURE_MAX, 0, 1) : 0; h.meterLabel.textContent = 'ORBIT'; h.meterText.textContent = state.ball.capturedBy === e ? (perfectSlingWindow(e) ? 'SUPERCHARGE!' : 'CHARGING') : 'CATCH'; h.meterFill.style.width = `${cap * 100}%`; }
-    if (e.type === 'repel' && e.overheated) h.pulse.textContent = 'HOT'; else if (e.cooldown > 0) h.pulse.textContent = `${e.cooldown.toFixed(1)}s`; else if (state.ball.capturedBy === e && perfectSlingWindow(e)) h.pulse.textContent = 'PULSE ORA!'; else h.pulse.textContent = 'READY';
+    else { const cap = state.ball.capturedBy === e ? clamp(e.captureTime / CAPTURE_MAX, 0, 1) : 0; h.meterLabel.textContent = 'GRIP'; h.meterText.textContent = state.ball.capturedBy === e ? 'SWIPE & RELEASE' : 'CATCH'; h.meterFill.style.width = `${cap * 100}%`; }
+    if (e.type === 'repel' && e.overheated) h.pulse.textContent = 'HOT'; else if (e.cooldown > 0) h.pulse.textContent = `${e.cooldown.toFixed(1)}s`; else if (state.ball.capturedBy === e) h.pulse.textContent = 'RILASCIA'; else h.pulse.textContent = 'READY';
     h.dash.textContent = e.dashCooldown > 0 ? `${e.dashCooldown.toFixed(1)}s` : 'READY';
   }
   function updateHud() {
     $('leftScore').textContent = state.score.left; $('rightScore').textContent = state.score.right; updateHudSide(state.left); updateHudSide(state.right);
     matchPoint.classList.toggle('show', running && Math.max(state.score.left, state.score.right) === targetScore() - 1);
     rallyEl.textContent = state.rally >= 2 ? `RALLY ×${state.rally}` : ''; rallyEl.classList.toggle('show', state.rally >= 2);
-    statusLine.textContent = selectedMode === 'polarity' ? 'POLARITY · i ruoli si scambiano dopo ogni punto.' : selectedMode === 'orbit' ? 'ORBIT · cattura, aspetta SUPERCHARGE e premi Pulse.' : 'DUEL · gestisci Heat e cerca il Perfect Parry.';
+    statusLine.textContent = selectedMode === 'polarity' ? 'POLARITY · Attractor: swipe + rilascio · Repulsor: timing + parry.' : selectedMode === 'orbit' ? 'ORBIT · cattura, fai swipe e rilascia. Più rapido = più forte.' : 'DUEL · gestisci Heat e cerca il Perfect Parry.';
   }
 
   function colorFor(e, alpha = 1) { return e.side === 'left' ? `rgba(255,88,116,${alpha})` : `rgba(93,231,255,${alpha})`; }
@@ -357,7 +385,7 @@
   function ringPath(e,r){ctx.beginPath();for(let i=0;i<=80;i++){const a=i/80*Math.PI*2,x=clamp(e.x+Math.cos(a)*r,8,WORLD.w-8),y=clamp(e.y+Math.sin(a)*r,8,WORLD.h-8);if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y)}}
   function drawEmitter(e){const radii=e.type==='attract'?[.34,.55,.76,1]:[.42,.68,1];for(let i=0;i<radii.length;i++){ringPath(e,e.fieldR*radii[i]);ctx.strokeStyle=colorFor(e,.10+i*.045);ctx.lineWidth=i===radii.length-1?2.1:1.2;ctx.stroke()}
     if(e.type==='repel'&&e.heat>.08){ringPath(e,e.fieldR*.52);ctx.strokeStyle=`rgba(255,214,107,${.08+e.heat*.34})`;ctx.lineWidth=2+e.heat*4;ctx.stroke()}
-    if(e.type==='attract'&&state.ball.capturedBy===e){ringPath(e,e.fieldR*.40);ctx.strokeStyle=perfectSlingWindow(e)?'rgba(255,214,107,.95)':'rgba(255,214,107,.32)';ctx.lineWidth=perfectSlingWindow(e)?7:3;ctx.setLineDash([14,12]);ctx.stroke();ctx.setLineDash([])}
+    if(e.type==='attract'&&state.ball.capturedBy===e){ringPath(e,e.fieldR*.40);ctx.strokeStyle='rgba(255,214,107,.72)';ctx.lineWidth=5;ctx.setLineDash([14,12]);ctx.stroke();ctx.setLineDash([])}
     const glow=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,85);glow.addColorStop(0,colorFor(e,1));glow.addColorStop(.18,colorFor(e,.8));glow.addColorStop(1,colorFor(e,0));ctx.fillStyle=glow;ctx.beginPath();ctx.arc(e.x,e.y,88,0,Math.PI*2);ctx.fill();ctx.strokeStyle=colorFor(e,.9);ctx.lineWidth=3;ctx.beginPath();ctx.arc(e.x,e.y,e.r+13,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff';ctx.shadowBlur=24;ctx.shadowColor=colorFor(e,1);ctx.beginPath();ctx.arc(e.x,e.y,11,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}
   function drawTrail(){const tr=state.ball.trail;for(let i=1;i<tr.length;i++){const a=i/tr.length;let c=`rgba(230,244,255,${a*.18})`;if(state.ball.chargedBy==='left')c=`rgba(255,88,116,${a*.44})`;if(state.ball.chargedBy==='right')c=`rgba(93,231,255,${a*.44})`;ctx.strokeStyle=c;ctx.lineWidth=1+a*(tr[i].speed>1150?8:4);ctx.beginPath();ctx.moveTo(tr[i-1].x,tr[i-1].y);ctx.lineTo(tr[i].x,tr[i].y);ctx.stroke()}}
   function drawBall(){const b=state.ball,sp=speedOf(b),hot=clamp((sp-800)/750,0,1);let glow='255,214,107',core='#fffdf4';if(b.capturedBy===state.left||b.chargedBy==='left'){glow='255,88,116';core='#fff0f3'}else if(b.capturedBy===state.right||b.chargedBy==='right'){glow='93,231,255';core='#edfdff'}const g=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,70);g.addColorStop(0,core);g.addColorStop(.3,`rgba(${glow},.55)`);g.addColorStop(1,`rgba(${glow},0)`);ctx.fillStyle=g;ctx.beginPath();ctx.arc(b.x,b.y,70+hot*25,0,Math.PI*2);ctx.fill();ctx.fillStyle=core;ctx.shadowBlur=24;ctx.shadowColor=`rgb(${glow})`;ctx.beginPath();ctx.arc(b.x,b.y,b.r+hot*3,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}
@@ -367,10 +395,29 @@
 
   function togglePause(){if(!running)return;paused=!paused;pauseBtn.textContent=paused?'▶ RIPRENDI':'Ⅱ PAUSA';if(paused)feedback('PAUSA','',999999);else{feedbackEl.classList.remove('show');feedbackTimer=0;lastTime=performance.now()}}
 
-  canvas.addEventListener('pointerdown',e=>{initAudio();const p=worldFromClient(e.clientX,e.clientY),side=p.x<WORLD.w/2?'left':'right',now=performance.now();pointers.set(e.pointerId,{side,x:p.x,y:p.y});canvas.setPointerCapture(e.pointerId);if(now-lastTap[side]<285)activateDash(emitterFor(side));lastTap[side]=now});
-  canvas.addEventListener('pointermove',e=>{const p0=pointers.get(e.pointerId);if(!p0)return;const p=worldFromClient(e.clientX,e.clientY);p0.x=p.x;p0.y=p.y});
-  function releasePointer(e){pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId)}
-  canvas.addEventListener('pointerup',releasePointer);canvas.addEventListener('pointercancel',releasePointer);
+  canvas.addEventListener('pointerdown',e=>{
+    initAudio();
+    const p0=worldFromClient(e.clientX,e.clientY),side=p0.x<WORLD.w/2?'left':'right',now=performance.now();
+    const p={side,x:p0.x,y:p0.y,swipeArmed:false,swipeStartX:p0.x,swipeStartY:p0.y,swipeStartT:now};
+    pointers.set(e.pointerId,p); canvas.setPointerCapture(e.pointerId);
+    const emitter=emitterFor(side);
+    if(emitter.type==='attract'&&state.ball.capturedBy===emitter) armPointerSwipe(p);
+    else { if(now-lastTap[side]<285)activateDash(emitter); lastTap[side]=now; }
+  });
+  canvas.addEventListener('pointermove',e=>{
+    const p=pointers.get(e.pointerId);if(!p)return;const w=worldFromClient(e.clientX,e.clientY);p.x=w.x;p.y=w.y;
+    const emitter=emitterFor(p.side);if(emitter.type==='attract'&&state.ball.capturedBy===emitter&&!p.swipeArmed)armPointerSwipe(p);
+  });
+  function releasePointer(e){
+    const p=pointers.get(e.pointerId);if(!p)return;
+    const w=worldFromClient(e.clientX,e.clientY),emitter=emitterFor(p.side);
+    if(p.swipeArmed&&emitter.type==='attract'&&state.ball.capturedBy===emitter){
+      releaseCapture(emitter,false,{dx:w.x-p.swipeStartX,dy:w.y-p.swipeStartY,duration:(performance.now()-p.swipeStartT)/1000});
+    }
+    pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+  }
+  canvas.addEventListener('pointerup',releasePointer);
+  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId)});
 
   window.addEventListener('keydown',e=>{const code=e.code;if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','ShiftRight'].includes(code))e.preventDefault();if(e.repeat){keys.add(code);return}if(code==='Space')activatePulse(state.left);else if(code==='ShiftLeft')activateDash(state.left);else if(code==='Enter')activatePulse(state.right);else if(code==='ShiftRight')activateDash(state.right);else if(code==='Escape'||code==='KeyP')togglePause();else keys.add(code)},{passive:false});
   window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());window.addEventListener('resize',resize);
