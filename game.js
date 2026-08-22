@@ -335,6 +335,8 @@
   function releaseCapture(emitter, owner, forced = false, keyboard = false) {
     const b = state.ball; if (b.capturedBy !== emitter) return false;
     const tangent = tangentFor(emitter), power = slingPower(emitter);
+    // La forza della fionda deriva dalla velocità angolare: più rapidamente ruoti il dito,
+    // maggiore è la velocità tangenziale (omega × r) percepita al rilascio.
     let speed = 700 + 1180 * Math.pow(power, .72);
     if (keyboard) speed = Math.max(speed, 1220);
     if (forced) speed = Math.max(880, Math.min(speed, 1320));
