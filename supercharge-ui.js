@@ -59,7 +59,7 @@
   coach.innerHTML = `
     <span class="ocStep">FIONDA ORBITALE · 1/3</span>
     <strong class="ocTitle">CATTURA LA PALLA</strong>
-    <span class="ocSub">Portala abbastanza vicino al nucleo dell’Attractor.</span>
+    <span class="ocSub">La zona di cattura è più larga: basta portarla vicino al nucleo.</span>
     <span class="ocFlow"><i>CATCH</i> → <i>ROTATE</i> → <b>RELEASE</b></span>
   `;
   frame.appendChild(coach);
@@ -79,15 +79,15 @@
     if (stage === 'catch') {
       stepEl.textContent = 'FIONDA ORBITALE · 1/3';
       titleEl.textContent = 'CATTURA LA PALLA';
-      subEl.textContent = 'Portala abbastanza vicino al nucleo dell’Attractor.';
+      subEl.textContent = 'La zona di cattura è più larga: basta portarla vicino al nucleo.';
     } else if (stage === 'spin') {
       stepEl.textContent = 'FIONDA ORBITALE · 2/3';
-      titleEl.textContent = '↻ RUOTA IL DITO';
-      subEl.textContent = 'Fai cerchi attorno al nucleo. La barra SPIN sale con la velocità angolare.';
+      titleEl.textContent = '↻ FAI UN CERCHIO FLUIDO';
+      subEl.textContent = 'Non serve girare velocissimo: lo SPIN sale più facilmente e conserva l’inerzia.';
     } else {
       stepEl.textContent = 'FIONDA ORBITALE · 3/3';
       titleEl.textContent = '⚡ SUPERCHARGE';
-      subEl.textContent = 'Molla il dito quando la freccia tangente punta dove vuoi tirare.';
+      subEl.textContent = 'Molla seguendo la freccia: mostra già la traiettoria con AIM ASSIST.';
       if (navigator.vibrate) navigator.vibrate(28);
     }
   }
@@ -103,8 +103,8 @@
       else stage = 'catch';
     }
     setStage(stage);
-    if (statusLine && stage === 'spin') statusLine.textContent = 'ATTRACTOR · Ruota il dito attorno al nucleo: più alta la velocità angolare, più potente il tiro. Rilascia sulla tangente.';
-    if (statusLine && stage === 'ready') statusLine.textContent = 'SUPERCHARGE · La potenza è pronta: scegli l’angolo guardando la freccia e molla il dito.';
+    if (statusLine && stage === 'spin') statusLine.textContent = 'ATTRACTOR EASY · Fai un cerchio fluido: lo spin sale più facilmente e resta carico anche se rallenti un attimo.';
+    if (statusLine && stage === 'ready') statusLine.textContent = 'SUPERCHARGE · Guarda la freccia assistita e molla: il tiro non verrà mandato all’indietro.';
     requestAnimationFrame(tick);
   }
 
