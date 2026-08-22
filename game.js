@@ -35,16 +35,18 @@
   const polarityButtons = [...document.querySelectorAll('[data-polarity]')];
 
   const WORLD = { w: 1600, h: 900 };
-  const FIELD_RADIUS = { attract: 475, repel: 350 };
-  const PULSE_COOLDOWN = { attract: .72, repel: 1.72 };
+  const FIELD_RADIUS = { attract: 500, repel: 350 };
+  const PULSE_COOLDOWN = { attract: .62, repel: 1.72 };
   const PULSE_DURATION = .20;
   const DASH_COOLDOWN = 1.75;
   const DASH_DURATION = .12;
-  const CAPTURE_MAX = 3.2;
-  const CAPTURE_RELEASE_LOCK = .34;
+  const CAPTURE_MAX = 4.5;
+  const CAPTURE_RELEASE_LOCK = .38;
   const REPULSOR_HEAT_LOCK = .96;
-  const MAX_ORBIT_OMEGA = 13.5;
-  const SUPERCHARGE_OMEGA = 9.0;
+  const MAX_ORBIT_OMEGA = 9.5;
+  const SUPERCHARGE_OMEGA = 5.3;
+  const ORBIT_INPUT_GAIN = 1.35;
+  const CAPTURE_RADIUS_FACTOR = .68;
   const keys = new Set();
   const pointer = {
     active: false, x: 0, y: 0, lastTap: 0,
@@ -164,8 +166,8 @@
     if (!statusLine) return;
     if (state.player.type === 'attract') {
       statusLine.textContent = state.ball.capturedBy === state.player
-        ? 'ATTRACTOR: fai ruotare il dito attorno al nucleo. Più veloce ruoti, più forte parte la palla quando rilasci.'
-        : 'ATTRACTOR: intercetta la palla. Dopo il CATCH, ruota il dito attorno al nucleo e rilascia come una fionda.';
+        ? 'ATTRACTOR EASY: fai un cerchio comodo attorno al nucleo e rilascia. Lo spin resta più a lungo e la freccia corregge i tiri troppo laterali.'
+        : 'ATTRACTOR EASY: la cattura è più ampia. Dopo il CATCH basta una rotazione fluida; non serve girare velocissimo.';
     } else if (selectedMode === 'polarity') {
       statusLine.textContent = 'REPULSOR: aspetta la palla vicino al nucleo per PERFECT PARRY. Dopo ogni punto i ruoli si scambiano.';
     } else statusLine.textContent = 'REPULSOR: difendi col posizionamento e usa PULSE per il parry. SHIFT = Dash.';
@@ -220,11 +222,11 @@
     paused = false; pauseBtn.textContent = 'Ⅱ PAUSA';
     if (selectedMode === 'polarity') setPolarityRoles(selectedPolarity, false); else applySettings();
     resetPositions(); updateHud(); running = true; menu.style.display = 'none'; lastTime = performance.now(); accumulator = 0;
-    feedback(state.player.type === 'attract' ? 'CATCH → ROTATE → RELEASE' : 'WAIT → PARRY', state.player.type === 'attract' ? 'RUOTA IL DITO COME UNA FIONDA' : 'SHIFT = DASH', 1150);
+    feedback(state.player.type === 'attract' ? 'CATCH → ROTATE → RELEASE' : 'WAIT → PARRY', state.player.type === 'attract' ? 'BASTA UN CERCHIO FLUIDO · AIM ASSIST ATTIVO' : 'SHIFT = DASH', 1250);
   }
   function endMatch(who) {
     running = false; updateHud(); menu.style.display = 'grid'; $('menuTitle').textContent = who === 'player' ? 'Vittoria.' : 'Rivincita?';
-    $('menuIntro').innerHTML = `Finale <b>${state.score.player} — ${state.score.cpu}</b>. ${who === 'player' ? 'Hai letto meglio il ritmo.' : 'Prova a cercare più timing e rotazione.'}`; startBtn.textContent = 'RIVINCITA';
+    $('menuIntro').innerHTML = `Finale <b>${state.score.player} — ${state.score.cpu}</b>. ${who === 'player' ? 'Hai letto meglio il ritmo.' : 'Prova una rotazione più fluida e lascia lavorare la freccia assistita.'}`; startBtn.textContent = 'RIVINCITA';
   }
   function swapPolarityAfterPoint() {
     if (selectedMode !== 'polarity') return; setPolarityRoles(opposite(polarityTurn), false);
@@ -307,10 +309,14 @@
   function rotateWithPointer(e, x, y) {
     if (state.ball.capturedBy !== e || !pointer.orbitArmed) return;
     const now = performance.now(), a = Math.atan2(y - e.y, x - e.x), delta = normAngle(a - pointer.orbitLastAngle);
-    const dt = clamp((now - pointer.orbitLastT) / 1000, .008, .08), omega = clamp(delta / dt, -MAX_ORBIT_OMEGA, MAX_ORBIT_OMEGA);
-    if (Math.abs(delta) > .002) {
+    const dt = clamp((now - pointer.orbitLastT) / 1000, .008, .10), omega = clamp((delta / dt) * ORBIT_INPUT_GAIN, -MAX_ORBIT_OMEGA, MAX_ORBIT_OMEGA);
+    if (Math.abs(delta) > .0015) {
       e.orbitAngle += delta;
-      e.slingOmega = e.slingOmega * .58 + omega * .42;
+      const sameDirection = Math.sign(omega || 1) === Math.sign(e.slingOmega || omega || 1);
+      const targetWeight = Math.abs(omega) >= Math.abs(e.slingOmega) ? .58 : .18;
+      e.slingOmega = sameDirection
+        ? e.slingOmega * (1 - targetWeight) + omega * targetWeight
+        : e.slingOmega * .55 + omega * .45;
       e.orbitSpin = Math.sign(e.slingOmega || e.orbitSpin || 1);
       e.slingPower = slingPower(e);
     }
@@ -318,13 +324,13 @@
   }
   function enterCapture(emitter, owner) {
     const b = state.ball; if (b.capturedBy || b.captureLock > 0 || emitter.type !== 'attract') return false;
-    const dx = b.x - emitter.x, dy = b.y - emitter.y, d = Math.hypot(dx, dy); if (d > emitter.fieldR * .58) return false;
-    b.capturedBy = emitter; emitter.captureTime = 0; emitter.orbitAngle = Math.atan2(dy, dx); emitter.orbitRadius = emitter.fieldR * .36;
+    const dx = b.x - emitter.x, dy = b.y - emitter.y, d = Math.hypot(dx, dy); if (d > emitter.fieldR * CAPTURE_RADIUS_FACTOR) return false;
+    b.capturedBy = emitter; emitter.captureTime = 0; emitter.orbitAngle = Math.atan2(dy, dx); emitter.orbitRadius = emitter.fieldR * .35;
     const cross = b.vx * dy - b.vy * dx; emitter.orbitSpin = Math.sign(cross || (owner === 'player' ? -1 : 1));
-    emitter.slingOmega = emitter.orbitSpin * 1.5; emitter.slingPower = slingPower(emitter); b.vx = b.vy = 0;
+    emitter.slingOmega = emitter.orbitSpin * 2.4; emitter.slingPower = slingPower(emitter); b.vx = b.vy = 0;
     if (owner === 'player') {
       if (pointer.active) armOrbitPointer(emitter, pointer.x, pointer.y); else pointer.orbitArmed = false;
-      feedback('CATCH!', 'RUOTA IL DITO ATTORNO AL NUCLEO', 620); tone(360, .08, .022, 'sine', 1.6);
+      feedback('CATCH!', 'RUOTA CON CALMA · NON SERVE ESSERE VELOCISSIMO', 720); tone(360, .08, .022, 'sine', 1.6);
     }
     burst(b.x, b.y, owner === 'player' ? 'cyan' : 'red', 10, 130); registerRally(owner); return true;
   }
@@ -332,22 +338,32 @@
     const spin = Math.sign(e.slingOmega || e.orbitSpin || 1);
     return { x: -Math.sin(e.orbitAngle) * spin, y: Math.cos(e.orbitAngle) * spin, spin };
   }
+  function assistedTangent(e, owner, forced = false) {
+    const tan = tangentFor(e), dir = ownerDir(owner), power = slingPower(e);
+    let x = tan.x, y = tan.y;
+    const minForward = forced ? .68 : .28 + .32 * (1 - power);
+    if (x * dir < minForward) {
+      x = dir * minForward;
+      const ySign = Math.sign(y || e.orbitSpin || 1);
+      y = ySign * Math.sqrt(Math.max(.01, 1 - x * x));
+    }
+    const m = Math.hypot(x, y) || 1;
+    return { x: x / m, y: y / m, spin: tan.spin };
+  }
   function releaseCapture(emitter, owner, forced = false, keyboard = false) {
     const b = state.ball; if (b.capturedBy !== emitter) return false;
-    const tangent = tangentFor(emitter), power = slingPower(emitter);
-    // La forza della fionda deriva dalla velocità angolare: più rapidamente ruoti il dito,
-    // maggiore è la velocità tangenziale (omega × r) percepita al rilascio.
-    let speed = 700 + 1180 * Math.pow(power, .72);
-    if (keyboard) speed = Math.max(speed, 1220);
-    if (forced) speed = Math.max(880, Math.min(speed, 1320));
-    speed = clamp(speed, 680, 1900);
+    const tangent = assistedTangent(emitter, owner, forced || keyboard), power = slingPower(emitter);
+    let speed = 820 + 1080 * Math.pow(power, .62);
+    if (keyboard) speed = Math.max(speed, 1350);
+    if (forced) speed = Math.max(1050, Math.min(speed, 1450));
+    speed = clamp(speed, 820, 1900);
     const supercharged = !forced && power >= SUPERCHARGE_OMEGA / MAX_ORBIT_OMEGA;
     b.vx = tangent.x * speed; b.vy = tangent.y * speed;
     b.capturedBy = null; b.captureLock = CAPTURE_RELEASE_LOCK; b.chargedBy = owner; b.chargedTime = supercharged ? 1.35 : .85;
     emitter.captureTime = 0; emitter.cooldown = Math.max(emitter.cooldown, PULSE_COOLDOWN.attract); emitter.slingPower = 0;
     pointer.orbitArmed = false; registerRally(owner);
     if (owner === 'player') {
-      feedback(supercharged ? 'ORBITAL SUPERCHARGE!' : forced ? 'AUTO RELEASE' : 'SLING RELEASE!', `${Math.round(speed)} SPEED · TANGENTE`, supercharged ? 850 : 650);
+      feedback(supercharged ? 'ORBITAL SUPERCHARGE!' : forced ? 'AUTO RELEASE' : 'SLING RELEASE!', `${Math.round(speed)} SPEED · AIM ASSIST`, supercharged ? 850 : 650);
       sfx('sling'); shake = Math.max(shake, supercharged ? 12 : 7); hitStop = Math.max(hitStop, supercharged ? .035 : .018);
     }
     burst(b.x, b.y, owner === 'player' ? 'gold' : 'red', supercharged ? 28 : 16, supercharged ? 320 : 230); return true;
@@ -427,21 +443,21 @@
     const owner = emitterOwner(e);
     if (owner === 'player') {
       const sinceMove = (performance.now() - pointer.orbitLastEventT) / 1000;
-      if (!pointer.orbitArmed || sinceMove > .09) e.slingOmega *= Math.pow(.11, dt);
+      if (!pointer.orbitArmed || sinceMove > .14) e.slingOmega *= Math.pow(.52, dt);
       e.slingPower = slingPower(e);
-      if (!pointer.orbitArmed) e.orbitAngle += e.slingOmega * dt * .55;
-      else e.orbitAngle += e.slingOmega * dt * .16;
-      e.orbitRadius = e.fieldR * (.345 + .055 * e.slingPower);
+      if (!pointer.orbitArmed) e.orbitAngle += e.slingOmega * dt * .72;
+      else e.orbitAngle += e.slingOmega * dt * .26;
+      e.orbitRadius = e.fieldR * (.34 + .06 * e.slingPower);
     } else {
       const dir = ownerDir(owner);
-      const targetOmega = 4.5 + 3.8 * DIFFICULTY[selectedDifficulty].aggression;
+      const targetOmega = 4.2 + 2.9 * DIFFICULTY[selectedDifficulty].aggression;
       e.slingOmega = e.orbitSpin * targetOmega; e.slingPower = slingPower(e); e.orbitAngle += e.slingOmega * dt; e.orbitRadius = e.fieldR * (.35 + .035 * e.slingPower);
-      const tan = tangentFor(e);
-      if ((tan.x * dir > .83 && e.captureTime > .32) || e.captureTime > 1.15) releaseCapture(e, owner, false, false);
+      const tan = assistedTangent(e, owner, false);
+      if ((tan.x * dir > .72 && e.captureTime > .38) || e.captureTime > 1.35) releaseCapture(e, owner, false, false);
       if (!b.capturedBy) return true;
     }
     b.x = e.x + Math.cos(e.orbitAngle) * e.orbitRadius; b.y = e.y + Math.sin(e.orbitAngle) * e.orbitRadius; b.vx = b.vy = 0;
-    b.trail.push({ x: b.x, y: b.y, speed: 650 + e.slingPower * 1050 }); if (b.trail.length > 48) b.trail.shift();
+    b.trail.push({ x: b.x, y: b.y, speed: 720 + e.slingPower * 1100 }); if (b.trail.length > 48) b.trail.shift();
     if (e.captureTime >= CAPTURE_MAX) releaseCapture(e, owner, true, false); return true;
   }
   function updateBall(dt) {
@@ -497,9 +513,9 @@
   function ringPath(s,r){ctx.beginPath();for(let i=0;i<=96;i++){const p=deformRingPoint(s,r,i/96*Math.PI*2);if(!i)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y)}}
   function drawSlingGuide(s) {
     if (s.type !== 'attract' || state.ball.capturedBy !== s) return;
-    const b=state.ball,p=slingPower(s),tan=tangentFor(s),supercharged=p>=SUPERCHARGE_OMEGA/MAX_ORBIT_OMEGA;
+    const b=state.ball,p=slingPower(s),tan=assistedTangent(s,emitterOwner(s),false),supercharged=p>=SUPERCHARGE_OMEGA/MAX_ORBIT_OMEGA;
     ctx.strokeStyle=supercharged?'rgba(255,214,107,.95)':colorForEmitter(s,.62); ctx.lineWidth=2.5+p*4; ctx.setLineDash([10,8]); ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(b.x,b.y); ctx.stroke(); ctx.setLineDash([]);
-    const len=70+p*145; ctx.strokeStyle=supercharged?'rgba(255,225,130,.98)':'rgba(230,248,255,.72)'; ctx.lineWidth=4+p*3; ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x+tan.x*len,b.y+tan.y*len); ctx.stroke();
+    const len=90+p*150; ctx.strokeStyle=supercharged?'rgba(255,225,130,.98)':'rgba(230,248,255,.78)'; ctx.lineWidth=4+p*3; ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x+tan.x*len,b.y+tan.y*len); ctx.stroke();
     const ex=b.x+tan.x*len,ey=b.y+tan.y*len,a=Math.atan2(tan.y,tan.x); ctx.fillStyle=ctx.strokeStyle; ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex-Math.cos(a-.45)*18,ey-Math.sin(a-.45)*18); ctx.lineTo(ex-Math.cos(a+.45)*18,ey-Math.sin(a+.45)*18); ctx.closePath(); ctx.fill();
   }
   function drawEmitter(s) {
