@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#030711" />
+  <meta name="description" content="Magnetar — duello magnetico locale per due giocatori" />
+  <title>Magnetar — 2 Giocatori</title>
+  <link rel="stylesheet" href="two-player.css" />
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="Torna a Magnetar single player">
+        <h1>MAGNETAR</h1><span>2 player local duel</span>
+      </a>
+      <div class="scoreboard" aria-label="Punteggio">
+        <div class="scoreSide left"><small>P1</small><strong id="leftScore">0</strong></div>
+        <span>—</span>
+        <div class="scoreSide right"><small>P2</small><strong id="rightScore">0</strong></div>
+      </div>
+      <div class="hudActions">
+        <button id="pauseBtn" type="button">Ⅱ PAUSA</button>
+        <button id="resetBtn" type="button">＋ NUOVA</button>
+      </div>
+    </header>
+
+    <section id="arenaWrap">
+      <div id="frame" class="frame">
+        <canvas id="game" aria-label="Magnetar due giocatori"></canvas>
+
+        <div id="feedback" class="feedback" aria-live="polite"><strong id="feedbackTitle"></strong><span id="feedbackSub"></span></div>
+        <div id="matchPoint" class="matchPoint">MATCH POINT</div>
+        <div id="rally" class="rally"></div>
+
+        <aside class="playerHud leftHud">
+          <div class="playerName"><span>P1 · SINISTRA</span><strong id="leftRole">REPULSOR</strong></div>
+          <div class="meter"><div><b id="leftMeterLabel">HEAT</b><span id="leftMeterText">0%</span></div><i><em id="leftMeterFill"></em></i></div>
+          <div class="abilityRow"><span>PULSE <b id="leftPulseState">READY</b></span><span>DASH <b id="leftDashState">READY</b></span></div>
+        </aside>
+
+        <aside class="playerHud rightHud">
+          <div class="playerName"><span>P2 · DESTRA</span><strong id="rightRole">REPULSOR</strong></div>
+          <div class="meter"><div><b id="rightMeterLabel">HEAT</b><span id="rightMeterText">0%</span></div><i><em id="rightMeterFill"></em></i></div>
+          <div class="abilityRow"><span>PULSE <b id="rightPulseState">READY</b></span><span>DASH <b id="rightDashState">READY</b></span></div>
+        </aside>
+
+        <div class="touchControls" aria-hidden="false">
+          <button id="leftPulseBtn" class="touchPulse leftPulse" type="button"><span>⚡</span>P1 PULSE</button>
+          <button id="rightPulseBtn" class="touchPulse rightPulse" type="button"><span>⚡</span>P2 PULSE</button>
+        </div>
+
+        <div id="menu" class="overlay">
+          <div class="card">
+            <div class="eyebrow">LOCAL VERSUS</div>
+            <h2>Due giocatori. Un campo.</h2>
+            <p id="modeHelp" class="intro">DUEL: due Repulsor. Difesa immediata, Heat e Perfect Parry.</p>
+
+            <div class="modePicker" role="group" aria-label="Modalità">
+              <button class="active" data-mode="duel" type="button">DUEL<small>R vs R</small></button>
+              <button data-mode="orbit" type="button">ORBIT<small>A vs A</small></button>
+              <button data-mode="polarity" type="button">POLARITY<small>A vs R</small></button>
+            </div>
+
+            <div class="controlsGrid">
+              <section><b>P1 · SINISTRA</b><span>WASD · muovi</span><span>SPAZIO · Pulse</span><span>SHIFT SX · Dash</span></section>
+              <section><b>P2 · DESTRA</b><span>FRECCE · muovi</span><span>INVIO · Pulse</span><span>SHIFT DX · Dash</span></section>
+            </div>
+            <p class="touchTip">Touch: trascinate contemporaneamente nelle rispettive metà · doppio tap = Dash · pulsanti in basso = Pulse.</p>
+
+            <button id="startBtn" class="start" type="button">PLAY — PRIMO A 7</button>
+            <a class="back" href="index.html">← TORNA A 1 GIOCATORE</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div><span class="dot red"></span>P1 <span class="dot cyan"></span>P2 <span class="goldLine"></span>finestra PERFECT</div>
+      <div id="statusLine">DUEL · gestisci Heat e cerca il Perfect Parry.</div>
+    </footer>
+  </main>
+  <script src="two-player.js"></script>
+</body>
+</html>
