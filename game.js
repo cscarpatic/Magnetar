@@ -40,10 +40,14 @@
   const PULSE_DURATION = .20;
   const DASH_COOLDOWN = 1.75;
   const DASH_DURATION = .12;
-  const CAPTURE_MAX = .82;
+  const CAPTURE_MAX = 1.35;
+  const CAPTURE_RELEASE_LOCK = .28;
   const REPULSOR_HEAT_LOCK = .96;
   const keys = new Set();
-  const pointer = { active: false, x: 0, y: 0, lastTap: 0 };
+  const pointer = {
+    active: false, x: 0, y: 0, lastTap: 0,
+    swipeArmed: false, swipeStartX: 0, swipeStartY: 0, swipeStartT: 0
+  };
 
   const MODES = {
     duel: { player: 'repel', cpu: 'repel' },
@@ -90,7 +94,7 @@
     particles: [],
     ball: {
       x: WORLD.w / 2, y: WORLD.h / 2, vx: 0, vy: 0, r: 14, trail: [],
-      capturedBy: null, chargedBy: null, chargedTime: 0
+      capturedBy: null, chargedBy: null, chargedTime: 0, captureLock: 0
     },
     player: makeEmitter(WORLD.w * .84, 'repel', 735),
     cpu: makeEmitter(WORLD.w * .16, 'repel', 545)
@@ -166,7 +170,7 @@
     setEmitterType(state.cpu, opposite(playerType));
     syncRoleLabels();
     if (announce && running) {
-      feedback('POLI INVERTITI', playerType === 'attract' ? 'ORA CATTURA E LANCIA' : 'ORA PARA E CONTRATTACCA', 900);
+      feedback('POLI INVERTITI', playerType === 'attract' ? 'ORA CATTURA E FAI SWIPE' : 'ORA PARA E CONTRATTACCA', 900);
       sfx('swap');
     }
   }
@@ -192,10 +196,10 @@
     if (!statusLine) return;
     if (selectedMode === 'polarity') {
       statusLine.textContent = state.player.type === 'attract'
-        ? 'ATTRACTOR: cattura → mira con l’orbita → PULSE nella finestra PERFECT. Dopo ogni punto i ruoli si scambiano.'
+        ? 'ATTRACTOR: cattura → fai swipe verso il bersaglio → rilascia. Più rapido lo swipe, più forte il tiro.'
         : 'REPULSOR: non spammare il campo. Aspetta la palla vicino al nucleo per PERFECT PARRY. Dopo ogni punto i ruoli si scambiano.';
     } else if (state.player.type === 'attract') {
-      statusLine.textContent = 'ATTRACTOR: cattura la palla e rilasciala con PULSE. SHIFT = Dash.';
+      statusLine.textContent = 'ATTRACTOR: cattura → swipe → rilascia. SPAZIO resta disponibile come tiro rapido da tastiera.';
     } else {
       statusLine.textContent = 'REPULSOR: difendi con il posizionamento e usa PULSE per il parry. SHIFT = Dash.';
     }
@@ -221,9 +225,8 @@
     pulseBtn.style.setProperty('--pulse-rotation', `${pct * 360}deg`);
 
     if (state.player.type === 'attract' && state.ball.capturedBy === state.player) {
-      const perfect = perfectSlingWindow(state.player);
-      pulseState.textContent = perfect ? 'PERFECT!' : 'AIM';
-      pulseHint.textContent = perfect ? 'PULSE ORA' : 'ASPETTA';
+      pulseState.textContent = 'SWIPE';
+      pulseHint.textContent = 'RILASCIA';
     } else if (state.player.type === 'repel' && state.player.overheated) {
       pulseState.textContent = 'HOT'; pulseHint.textContent = 'RAFFREDDA';
     } else {
@@ -244,8 +247,8 @@
         roleMeterFill.style.width = `${state.player.heat * 100}%`;
       } else {
         const cap = state.ball.capturedBy === state.player ? clamp(state.player.captureTime / CAPTURE_MAX, 0, 1) : 0;
-        roleMeterLabel.textContent = 'ORBIT';
-        roleMeterText.textContent = state.ball.capturedBy === state.player ? (perfectSlingWindow(state.player) ? 'PERFECT' : 'AIM') : 'CATCH';
+        roleMeterLabel.textContent = 'GRIP';
+        roleMeterText.textContent = state.ball.capturedBy === state.player ? 'SWIPE & RELEASE' : 'CATCH';
         roleMeterFill.style.width = `${cap * 100}%`;
       }
     }
@@ -276,8 +279,9 @@
     state.cpu.cooldown = Math.min(state.cpu.cooldown, .55);
     state.combo = 0; state.comboTimer = 0; state.lastOwner = null; state.lastWallHit = 0;
     state.rally = 0; state.rallyTimer = 0;
+    pointer.swipeArmed = false;
     const b = state.ball;
-    b.capturedBy = null; b.chargedBy = null; b.chargedTime = 0;
+    b.capturedBy = null; b.chargedBy = null; b.chargedTime = 0; b.captureLock = 0;
     b.x = WORLD.w / 2; b.y = WORLD.h / 2 + (Math.random() - .5) * 150;
     const speed = 500, angle = (Math.random() - .5) * .52, sign = serveToward || (Math.random() < .5 ? -1 : 1);
     b.vx = Math.cos(angle) * speed * sign; b.vy = Math.sin(angle) * speed;
@@ -296,8 +300,8 @@
     running = true; menu.style.display = 'none';
     lastTime = performance.now(); accumulator = 0;
     if (selectedMode === 'polarity') {
-      feedback(state.player.type === 'attract' ? 'CATCH → AIM → PULSE' : 'WAIT → PARRY', 'I POLI SI SCAMBIANO DOPO OGNI PUNTO', 1150);
-    } else feedback(state.player.type === 'attract' ? 'CATCH → PULSE' : 'POSITION → PULSE', 'SHIFT = DASH', 850);
+      feedback(state.player.type === 'attract' ? 'CATCH → SWIPE → RELEASE' : 'WAIT → PARRY', 'I POLI SI SCAMBIANO DOPO OGNI PUNTO', 1150);
+    } else feedback(state.player.type === 'attract' ? 'CATCH → SWIPE → RELEASE' : 'POSITION → PULSE', 'SHIFT = DASH', 950);
   }
 
   function endMatch(who) {
@@ -305,7 +309,7 @@
     $('menuTitle').textContent = who === 'player' ? 'Vittoria.' : 'Rivincita?';
     $('menuIntro').innerHTML = who === 'player'
       ? `Finale <b>${state.score.player} — ${state.score.cpu}</b>. Hai letto meglio il ritmo.`
-      : `Finale <b>${state.score.player} — ${state.score.cpu}</b>. Prova a cercare più Perfect timing.`;
+      : `Finale <b>${state.score.player} — ${state.score.cpu}</b>. Prova a cercare più timing e angoli.`;
     startBtn.textContent = 'RIVINCITA';
   }
 
@@ -314,7 +318,7 @@
     setPolarityRoles(opposite(polarityTurn), false);
     setTimeout(() => {
       if (running) {
-        feedback('POLI INVERTITI', state.player.type === 'attract' ? 'ORA CATTURA E LANCIA' : 'ORA PARA E CONTRATTACCA', 820);
+        feedback('POLI INVERTITI', state.player.type === 'attract' ? 'ORA CATTURA E FAI SWIPE' : 'ORA PARA E CONTRATTACCA', 820);
         sfx('swap');
       }
     }, 360);
@@ -383,6 +387,7 @@
       state.player.y += state.player.dashY * 1700 * dt;
       return;
     }
+    if (state.ball.capturedBy === state.player && pointer.active) return;
     let tx = state.player.x, ty = state.player.y;
     if (pointer.active) { tx = pointer.x; ty = pointer.y; }
     else {
@@ -436,9 +441,16 @@
     return 1 + .20 * smooth01(forward);
   }
 
+  function armPlayerSwipe(x = pointer.x, y = pointer.y) {
+    pointer.swipeArmed = true;
+    pointer.swipeStartX = x;
+    pointer.swipeStartY = y;
+    pointer.swipeStartT = performance.now();
+  }
+
   function enterCapture(emitter, owner) {
     const b = state.ball;
-    if (b.capturedBy || emitter.type !== 'attract') return false;
+    if (b.capturedBy || b.captureLock > 0 || emitter.type !== 'attract') return false;
     const dx = b.x - emitter.x, dy = b.y - emitter.y;
     const d = Math.hypot(dx, dy);
     if (d > emitter.fieldR * .58) return false;
@@ -449,35 +461,63 @@
     const cross = (b.vx * dy - b.vy * dx);
     emitter.orbitSpin = Math.sign(cross || (owner === 'player' ? -1 : 1));
     b.vx = 0; b.vy = 0;
-    if (owner === 'player') { feedback('CATCH!', 'MIRA CON L’ORBITA', 440); tone(360, .08, .022, 'sine', 1.6); }
+    if (owner === 'player') {
+      if (pointer.active) armPlayerSwipe(pointer.x, pointer.y);
+      else pointer.swipeArmed = false;
+      feedback('CATCH!', 'SWIPE VERSO IL BERSAGLIO E RILASCIA', 620);
+      tone(360, .08, .022, 'sine', 1.6);
+    }
     burst(b.x, b.y, owner === 'player' ? 'cyan' : 'red', 10, 130);
     registerRally(owner);
     return true;
   }
 
-  function releaseCapture(emitter, owner, forced = false) {
+  function releaseCapture(emitter, owner, forced = false, swipe = null) {
     const b = state.ball;
     if (b.capturedBy !== emitter) return false;
-    const perfect = perfectSlingWindow(emitter) && !forced;
-    const dir = ownerDir(owner);
-    const spin = emitter.orbitSpin;
-    let tx = -Math.sin(emitter.orbitAngle) * spin;
-    let ty = Math.cos(emitter.orbitAngle) * spin;
-    if (tx * dir < .25) tx = dir * .55;
-    const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
-    const charge = clamp(emitter.captureTime / CAPTURE_MAX, 0, 1);
-    const speed = perfect ? 1570 : forced ? 1050 : 1210 + 210 * charge;
-    b.vx = tx * speed; b.vy = ty * speed;
-    if (b.vx * dir < speed * .55) {
-      b.vx = dir * speed * .55;
-      const vySign = Math.sign(b.vy || 1);
-      b.vy = vySign * Math.sqrt(Math.max(1, speed * speed - b.vx * b.vx));
+
+    let tx, ty, speed, perfect = false;
+    if (swipe && !forced) {
+      const dist = Math.hypot(swipe.dx, swipe.dy);
+      const duration = clamp(swipe.duration, .055, .80);
+      if (dist < 14) {
+        tx = ownerDir(owner); ty = 0;
+      } else {
+        tx = swipe.dx / dist; ty = swipe.dy / dist;
+      }
+      const gestureSpeed = dist / duration;
+      speed = clamp(680 + gestureSpeed * .34, 720, 1850);
+      perfect = speed >= 1550;
+    } else {
+      perfect = perfectSlingWindow(emitter) && !forced;
+      const dir = ownerDir(owner);
+      const spin = emitter.orbitSpin;
+      tx = -Math.sin(emitter.orbitAngle) * spin;
+      ty = Math.cos(emitter.orbitAngle) * spin;
+      if (tx * dir < .25) tx = dir * .55;
+      const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
+      const charge = clamp(emitter.captureTime / CAPTURE_MAX, 0, 1);
+      speed = perfect ? 1570 : forced ? 1050 : 1210 + 210 * charge;
+      if (tx * dir < .55) {
+        tx = dir * .55;
+        const ySign = Math.sign(ty || 1);
+        ty = ySign * Math.sqrt(Math.max(.01, 1 - tx * tx));
+      }
     }
-    b.capturedBy = null; emitter.capture = 0; emitter.captureTime = 0;
+
+    const m = Math.hypot(tx, ty) || 1;
+    tx /= m; ty /= m;
+    b.vx = tx * speed; b.vy = ty * speed;
+    b.capturedBy = null;
+    b.captureLock = CAPTURE_RELEASE_LOCK;
+    emitter.capture = 0; emitter.captureTime = 0;
     b.chargedBy = owner; b.chargedTime = perfect ? 1.35 : .85;
+    pointer.swipeArmed = false;
     registerRally(owner);
+
     if (owner === 'player') {
-      feedback(perfect ? 'PERFECT SLINGSHOT!' : forced ? 'AUTO RELEASE' : 'SLINGSHOT!', perfect ? 'CHARGED · +POWER' : `${Math.round(speedOf(b))} SPEED`, perfect ? 820 : 620);
+      const title = swipe ? (perfect ? 'SUPERCHARGE SWIPE!' : 'SWIPE SHOT!') : (perfect ? 'PERFECT SLINGSHOT!' : forced ? 'AUTO RELEASE' : 'SLINGSHOT!');
+      feedback(title, `${Math.round(speed)} SPEED`, perfect ? 820 : 620);
       sfx('sling'); shake = Math.max(shake, perfect ? 12 : 7); hitStop = Math.max(hitStop, perfect ? .035 : .018);
     }
     burst(b.x, b.y, owner === 'player' ? 'gold' : 'red', perfect ? 26 : 16, perfect ? 310 : 230);
@@ -616,12 +656,12 @@
     const b = state.ball, e = b.capturedBy;
     if (!e) return false;
     e.captureTime += dt;
-    e.orbitAngle += e.orbitSpin * (4.2 + 1.8 * clamp(e.captureTime / CAPTURE_MAX, 0, 1)) * dt;
-    const rr = e.fieldR * (.40 - .055 * clamp(e.captureTime / CAPTURE_MAX, 0, 1));
+    e.orbitAngle += e.orbitSpin * (3.4 + 1.2 * clamp(e.captureTime / CAPTURE_MAX, 0, 1)) * dt;
+    const rr = e.fieldR * (.40 - .045 * clamp(e.captureTime / CAPTURE_MAX, 0, 1));
     b.x = e.x + Math.cos(e.orbitAngle) * rr;
     b.y = e.y + Math.sin(e.orbitAngle) * rr;
     b.vx = b.vy = 0;
-    b.trail.push({ x: b.x, y: b.y, speed: 760 + e.captureTime * 500 });
+    b.trail.push({ x: b.x, y: b.y, speed: 720 + e.captureTime * 320 });
     if (b.trail.length > 44) b.trail.shift();
     if (e.captureTime >= CAPTURE_MAX) releaseCapture(e, emitterOwner(e), true);
     return true;
@@ -693,6 +733,7 @@
     state.rallyTimer = Math.max(0, state.rallyTimer - dt);
     state.lastWallHit = Math.max(0, state.lastWallHit - dt);
     state.ball.chargedTime = Math.max(0, state.ball.chargedTime - dt);
+    state.ball.captureLock = Math.max(0, state.ball.captureLock - dt);
     if (!state.ball.chargedTime) state.ball.chargedBy = null;
     if (!state.comboTimer) state.combo = 0;
     if (!state.rallyTimer && state.rally < 2) state.rally = 0;
@@ -749,7 +790,7 @@
   }
 
   function drawPerfectMarker(s) {
-    if (s.type !== 'attract' || state.ball.capturedBy !== s) return;
+    if (s.type !== 'attract' || state.ball.capturedBy !== s || s === state.player) return;
     const dir = ownerDir(emitterOwner(s));
     const spin = s.orbitSpin;
     const perfectAngle = (-dir * spin) > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -777,7 +818,9 @@
     }
     if (s.type === 'attract' && state.ball.capturedBy === s) {
       ringPath(s, s.fieldR * .40);
-      ctx.strokeStyle = 'rgba(255,214,107,.34)'; ctx.lineWidth = 3; ctx.setLineDash([14, 12]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = s === state.player ? 'rgba(255,214,107,.70)' : 'rgba(255,214,107,.34)';
+      ctx.lineWidth = s === state.player ? 5 : 3;
+      ctx.setLineDash([14, 12]); ctx.stroke(); ctx.setLineDash([]);
       drawPerfectMarker(s);
     }
     const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 80 + pulse * 25);
@@ -846,18 +889,42 @@
 
   canvas.addEventListener('pointerdown', e => {
     initAudio();
-    const p = worldFromClient(e.clientX, e.clientY); pointer.x = p.x; pointer.y = p.y;
+    const p = worldFromClient(e.clientX, e.clientY);
+    pointer.x = p.x; pointer.y = p.y;
+    pointer.active = true;
+    const captured = state.player.type === 'attract' && state.ball.capturedBy === state.player;
     const now = performance.now();
-    if (now - pointer.lastTap < 285) activateDash(state.player, true);
-    pointer.lastTap = now;
-    pointer.active = true; canvas.setPointerCapture(e.pointerId);
+    if (captured) armPlayerSwipe(p.x, p.y);
+    else {
+      if (now - pointer.lastTap < 285) activateDash(state.player, true);
+      pointer.lastTap = now;
+      pointer.swipeArmed = false;
+    }
+    canvas.setPointerCapture(e.pointerId);
   });
+
   canvas.addEventListener('pointermove', e => {
     if (!pointer.active) return;
-    const p = worldFromClient(e.clientX, e.clientY); pointer.x = p.x; pointer.y = p.y;
+    const p = worldFromClient(e.clientX, e.clientY);
+    pointer.x = p.x; pointer.y = p.y;
+    if (state.ball.capturedBy === state.player && !pointer.swipeArmed) armPlayerSwipe(p.x, p.y);
   });
-  canvas.addEventListener('pointerup', e => { pointer.active = false; if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); });
-  canvas.addEventListener('pointercancel', () => { pointer.active = false; });
+
+  canvas.addEventListener('pointerup', e => {
+    const p = worldFromClient(e.clientX, e.clientY);
+    if (pointer.active && pointer.swipeArmed && state.ball.capturedBy === state.player && state.player.type === 'attract') {
+      releaseCapture(state.player, 'player', false, {
+        dx: p.x - pointer.swipeStartX,
+        dy: p.y - pointer.swipeStartY,
+        duration: (performance.now() - pointer.swipeStartT) / 1000
+      });
+    }
+    pointer.active = false;
+    pointer.swipeArmed = false;
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('pointercancel', () => { pointer.active = false; pointer.swipeArmed = false; });
 
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
