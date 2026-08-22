@@ -195,6 +195,17 @@
     return tangentX * dir > .82 && Math.abs(tangentY) < .56;
   }
 
+  function tryNearestCapture() {
+    const b = state.ball;
+    if (b.capturedBy) return false;
+    const candidates = [state.left, state.right]
+      .filter(e => e.type === 'attract')
+      .map(e => ({ e, d: Math.hypot(b.x - e.x, b.y - e.y) }))
+      .filter(x => x.d <= x.e.fieldR * .58)
+      .sort((a, b2) => a.d - b2.d);
+    return candidates.length ? enterCapture(candidates[0].e) : false;
+  }
+
   function enterCapture(e) {
     const b = state.ball; if (b.capturedBy || e.type !== 'attract') return false;
     const dx = b.x - e.x, dy = b.y - e.y, d = Math.hypot(dx, dy); if (d > e.fieldR * .58) return false;
@@ -262,7 +273,6 @@
     const dx = e.x - b.x, dy = e.y - b.y, d = Math.hypot(dx, dy); if (d < .01) return { ax: 0, ay: 0 };
     const w = wallWeights(e), sx = 1 + .9 * (w.left + w.right), sy = 1 + .9 * (w.top + w.bottom);
     if (Math.hypot(dx * sx, dy * sy) >= e.fieldR) return { ax: 0, ay: 0 };
-    if (e.type === 'attract' && enterCapture(e)) return { ax: 0, ay: 0 };
     const tx = dx / d, ty = dy / d, t = clamp(d / e.fieldR, 0, 1), zone = dangerBoost(e); let fx = 0, fy = 0;
     if (e.type === 'repel') {
       const efficiency = 1 - .58 * smooth01(e.heat), pulseBoost = e.pulse > 0 ? 1.18 : 1;
@@ -290,6 +300,7 @@
   function updateBall(dt) {
     if (resetTimer > 0) { resetTimer -= dt; return; }
     const b = state.ball; if (updateCapturedBall(dt)) return;
+    if (tryNearestCapture()) return;
     const fl = fieldForce(state.left, b, dt), fr = fieldForce(state.right, b, dt); b.vx += (fl.ax + fr.ax) * dt; b.vy += (fl.ay + fr.ay) * dt;
     let sp = speedOf(b); const maxSpeed = 1980; if (sp > maxSpeed) { b.vx = b.vx / sp * maxSpeed; b.vy = b.vy / sp * maxSpeed; sp = maxSpeed; }
     b.x += b.vx * dt; b.y += b.vy * dt;
